@@ -92,15 +92,15 @@ with col2:
                 logits = model(**inputs).logits
                 probs = F.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
         else:
-            probs = [1.0 / len(LABELS)] * len(LABELS)
+            probs = [1.0 / 41] * 41
             
-        # 👉 Sửa đoạn này để tự động khớp với số lượng nhãn thực tế của mô hình (tránh lỗi IndexError)
-        num_classes = len(probs)
-        prob_dict = {
-            LABELS[i] if i < len(LABELS) else f"class_{i}": float(probs[i]) 
-            for i in range(num_classes)
-        }
-        
+        # 👉 Tự động lấy nhãn chuẩn từ model.config (khớp 100% với lúc train trên Kaggle)
+        id2label = getattr(model.config, "id2label", None)
+        if id2label:
+            prob_dict = {id2label[i]: float(probs[i]) for i in range(len(probs))}
+        else:
+            prob_dict = {f"class_{i}": float(probs[i]) for i in range(len(probs))}
+            
         sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
         top_intent, max_p = sorted_probs[0]
         
