@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from pyvi import ViTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-LABELS = [
+# Danh sách 41 nhãn dự phòng (Fallback)
+DEFAULT_LABELS = [
     "alarm_query", "audio_volume_down", "audio_volume_mute", "audio_volume_other",
     "calendar_remove", "calendar_set", "cooking_query", "cooking_recipe",
     "datetime_clock", "datetime_convert", "email_addcontact", "email_query",
@@ -17,7 +18,7 @@ LABELS = [
     "play_music", "play_podcasts", "play_radio", "qa_definition", "out_of_scope"
 ]
 
-# 👉 Trỏ trực tiếp tới repo mô hình của bạn trên Hugging Face
+# Tên Repository chính thức trên Hugging Face
 MODEL_NAME = "John-asd123/vietnamese-intent-p4"
 
 st.set_page_config(
@@ -33,20 +34,21 @@ st.markdown("**Mô hình:** PhoBERT-v2 (Fine-tuned P4) | **Accuracy:** 88.34%")
 def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Hugging Face tự động tải trọng số đã train về cache của Streamlit Cloud cực kỳ nhanh
+    # Tải tokenizer và model trực tiếp từ Hugging Face Hub
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
     model.to(device)
     model.eval()
     return tokenizer, model, device
 
+# Tải mô hình
 try:
     with st.spinner("Đang tải mô hình từ Hugging Face... Vui lòng đợi trong giây lát..."):
         tokenizer, model, device = load_model()
     has_model = True
     st.success("✅ Đã tải mô hình thành công!")
 except Exception as e:
-    st.warning(f"⚠️ Chưa tải được mô hình: {e}")
+    st.error(f"⚠️ Chưa tải được mô hình: {e}")
     has_model = False
 
 # Sidebar cấu hình ngưỡng
@@ -54,7 +56,7 @@ st.sidebar.header("⚙️ Cấu hình hệ thống")
 tau_threshold = st.sidebar.slider(
     "Ngưỡng tin cậy an toàn (Threshold τ):",
     min_value=0.0, max_value=1.0, value=0.70, step=0.01,
-    help="Nếu xác suất cao nhất < τ hoặc là out_of_scope, hệ thống sẽ cảnh báo Ngoài miền (OOS)."
+    help="Nếu xác suất cao nhất < τ hoặc nhãn dự đoán là out_of_scope, hệ thống sẽ cảnh báo Ngoài miền (OOS)."
 )
 
 # Giao diện chính
@@ -66,8 +68,8 @@ with col1:
         "💡 Chọn câu ví dụ mẫu để test nhanh:",
         [
             "-- Tự nhập câu lệnh --",
-            "bật cho tôi bài hát Lạc Trôi của Sơn Tùng",
             "đặt báo thức lúc sáu giờ sáng mai",
+            "bật cho tôi bài hát Lạc Trôi của Sơn Tùng",
             "xem lịch họp buổi chiều nay có những gì",
             "tat den phong khach giup toi",
             "mai có mưa không em",
@@ -84,6 +86,7 @@ with col2:
     st.subheader("📊 Kết quả phân tích")
     
     if btn_predict and input_text.strip():
+        # Tách từ tiếng Việt qua PyVi
         segmented_text = ViTokenizer.tokenize(input_text.strip())
         
         if has_model:
@@ -91,19 +94,25 @@ with col2:
             with torch.no_grad():
                 logits = model(**inputs).logits
                 probs = F.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
+                
+            # Trích xuất id2label từ config của mô hình
+            id2label = getattr(model.config, "id2label", None)
+            if id2label:
+                # Ép kiểu index về str/int để lấy đúng nhãn
+                prob_dict = {
+                    id2label.get(str(i), id2label.get(i, f"class_{i}")): float(probs[i])
+                    for i in range(len(probs))
+                }
+            else:
+                prob_dict = {DEFAULT_LABELS[i]: float(probs[i]) for i in range(min(len(probs), len(DEFAULT_LABELS)))}
         else:
-            probs = [1.0 / 41] * 41
+            prob_dict = {label: 1.0 / len(DEFAULT_LABELS) for label in DEFAULT_LABELS}
             
-        # 👉 Tự động lấy nhãn chuẩn từ model.config (khớp 100% với lúc train trên Kaggle)
-        id2label = getattr(model.config, "id2label", None)
-        if id2label:
-            prob_dict = {id2label[i]: float(probs[i]) for i in range(len(probs))}
-        else:
-            prob_dict = {f"class_{i}": float(probs[i]) for i in range(len(probs))}
-            
+        # Sắp xếp các intent theo xác suất giảm dần
         sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
         top_intent, max_p = sorted_probs[0]
         
+        # Kiểm tra điều kiện OOS
         is_oos = (max_p < tau_threshold) or (top_intent == "out_of_scope")
         
         if is_oos:
