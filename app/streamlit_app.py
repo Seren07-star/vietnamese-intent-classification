@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from pyvi import ViTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-# 1. Danh sách 41 Nhãn (40 In-Scope + 1 OOS)
 LABELS = [
     "alarm_query", "audio_volume_down", "audio_volume_mute", "audio_volume_other",
     "calendar_remove", "calendar_set", "cooking_query", "cooking_recipe",
@@ -18,9 +17,9 @@ LABELS = [
     "play_music", "play_podcasts", "play_radio", "qa_definition", "out_of_scope"
 ]
 
-MODEL_NAME = "vinai/phobert-base-v2"
+# 👉 Trỏ trực tiếp tới repo mô hình của bạn trên Hugging Face
+MODEL_NAME = "John-asd123/vietnamese-intent-p4"
 
-# Page Config
 st.set_page_config(
     page_title="Vietnamese Intent & OOS Detection",
     page_icon="🎙️",
@@ -28,25 +27,29 @@ st.set_page_config(
 )
 
 st.title("🎙️ Hệ Thống Phân Loại Ý Định & Phát Hiện Ngoài Miền (OOS) Tiếng Việt")
-st.markdown("**Mô hình:** PhoBERT-v2 | **Thực nghiệm:** MASSIVE (vi-VN) & PhoATIS | **Accuracy:** 88.34%")
+st.markdown("**Mô hình:** PhoBERT-v2 (Fine-tuned P4) | **Accuracy:** 88.34%")
 
 @st.cache_resource
 def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Hugging Face tự động tải trọng số đã train về cache của Streamlit Cloud cực kỳ nhanh
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=len(LABELS))
+    model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
     model.to(device)
     model.eval()
     return tokenizer, model, device
 
 try:
-    tokenizer, model, device = load_model()
+    with st.spinner("Đang tải mô hình từ Hugging Face... Vui lòng đợi trong giây lát..."):
+        tokenizer, model, device = load_model()
     has_model = True
+    st.success("✅ Đã tải mô hình thành công!")
 except Exception as e:
-    st.warning(f"⚠️ Chưa tải được trọng số mô hình thực tế, đang chạy chế độ mô phỏng fallback: {e}")
+    st.warning(f"⚠️ Chưa tải được mô hình: {e}")
     has_model = False
 
-# Sidebar
+# Sidebar cấu hình ngưỡng
 st.sidebar.header("⚙️ Cấu hình hệ thống")
 tau_threshold = st.sidebar.slider(
     "Ngưỡng tin cậy an toàn (Threshold τ):",
@@ -54,13 +57,11 @@ tau_threshold = st.sidebar.slider(
     help="Nếu xác suất cao nhất < τ hoặc là out_of_scope, hệ thống sẽ cảnh báo Ngoài miền (OOS)."
 )
 
-# Main UI
+# Giao diện chính
 col1, col2 = st.columns([1, 1])
 
 with col1:
     st.subheader("📝 Nhập câu lệnh")
-    
-    # Quick Examples
     example_selected = st.selectbox(
         "💡 Chọn câu ví dụ mẫu để test nhanh:",
         [
@@ -97,8 +98,9 @@ with col2:
         sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
         top_intent, max_p = sorted_probs[0]
         
-        # Decision
-        if max_p < tau_threshold or top_intent == "out_of_scope":
+        is_oos = (max_p < tau_threshold) or (top_intent == "out_of_scope")
+        
+        if is_oos:
             st.error(f"🚨 **CẢNH BÁO: CÂU LỆNH NGOÀI MIỀN (OUT-OF-SCOPE / UNKNOWN)**")
             st.info(f"- Độ tin cậy tối đa: `{max_p:.2%}` < Ngưỡng an toàn τ (`{tau_threshold:.2%}`)")
         else:
@@ -108,6 +110,5 @@ with col2:
             
         st.markdown("---")
         st.write("**Top-5 Xác suất ý định:**")
-        top_5 = sorted_probs[:5]
-        for intent_name, p_val in top_5:
-            st.progress(p_val, text=f"{intent_name}: {p_val:.2%}")
+        for intent_name, p_val in sorted_probs[:5]:
+            st.progress(float(p_val), text=f"{intent_name}: {p_val:.2%}")
