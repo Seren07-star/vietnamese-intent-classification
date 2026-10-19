@@ -94,7 +94,13 @@ with col2:
         else:
             probs = [1.0 / len(LABELS)] * len(LABELS)
             
-        prob_dict = {LABELS[i]: float(probs[i]) for i in range(len(LABELS))}
+        # 👉 Sửa đoạn này để tự động khớp với số lượng nhãn thực tế của mô hình (tránh lỗi IndexError)
+        num_classes = len(probs)
+        prob_dict = {
+            LABELS[i] if i < len(LABELS) else f"class_{i}": float(probs[i]) 
+            for i in range(num_classes)
+        }
+        
         sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
         top_intent, max_p = sorted_probs[0]
         
