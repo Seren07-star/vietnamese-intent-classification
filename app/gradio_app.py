@@ -32,11 +32,12 @@ except Exception as e:
 
 def predict_intent(text, tau_threshold, top_k=5):
     if not text or text.strip() == "":
-        return "⚠️ Vui lòng nhập câu lệnh.", {}, ""
+        return "⚠️ Vui lòng nhập câu lệnh để dự đoán.", {}, ""
     
-    segmented = ViTokenizer.tokenize(text.strip())
+    segmented_text = ViTokenizer.tokenize(text.strip())
+    
     if has_model:
-        inputs = tokenizer(segmented, return_tensors="pt", truncation=True, max_length=128).to(device)
+        inputs = tokenizer(segmented_text, return_tensors="pt", truncation=True, max_length=128).to(device)
         with torch.no_grad():
             logits = model(**inputs).logits
             probs = F.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
@@ -45,32 +46,76 @@ def predict_intent(text, tau_threshold, top_k=5):
         
     prob_dict = {LABELS[i]: float(probs[i]) for i in range(len(LABELS))}
     sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
+    
     top_intent, max_p = sorted_probs[0]
     top_k_results = {k: v for k, v in sorted_probs[:top_k]}
     
     if max_p < tau_threshold or top_intent == "out_of_scope":
-        status_msg = f"🚨 **CẢNH BÁO: NGOÀI MIỀN (OOS)**\n- Confidence: `{max_p:.2%}` < Ngưỡng $\\tau$ (`{tau_threshold:.2%}`)."
-        decision_display = "⚠️ [UNKNOWN / OOS]"
+        status_msg = (
+            f"🚨 **CẢNH BÁO: CÂU LỆNH NGOÀI MIỀN (OUT-OF-SCOPE / UNKNOWN)**\n"
+            f"- Độ tin cậy tối đa: `{max_p:.2%}` < Ngưỡng an toàn $\\tau$ (`{tau_threshold:.2%}`)."
+        )
+        decision_display = "⚠️ [UNKNOWN / OUT-OF-SCOPE]"
     else:
-        status_msg = f"✅ **HỢP LỆ (IN-SCOPE)**\n- Ý định: **{top_intent}**\n- Confidence: `{max_p:.2%}`"
+        status_msg = (
+            f"✅ **XÁC NHẬN: Ý ĐỊNH HỢP LỆ (IN-SCOPE)**\n"
+            f"- Ý định xác định: **{top_intent}**\n"
+            f"- Độ tin cậy cao nhất: `{max_p:.2%}`"
+        )
         decision_display = f"🎯 {top_intent} ({max_p:.2%})"
         
     return decision_display, top_k_results, status_msg
 
-demo = gr.Blocks(title="Vietnamese Intent Classification")
-with demo:
-    gr.Markdown("# 🎙️ Vietnamese Intent Classification & OOS Detection")
-    with gr.Row():
-        with gr.Column():
-            input_text = gr.Textbox(label="Nhập câu lệnh:", placeholder="Ví dụ: đặt báo thức 6h sáng mai...")
-            tau_slider = gr.Slider(0.0, 1.0, value=0.70, step=0.01, label="Ngưỡng tin cậy (Threshold τ)")
-            btn_submit = gr.Button("Phân tích ý định", variant="primary")
-        with gr.Column():
-            out_decision = gr.Label(label="Quyết định hệ thống")
-            out_probs = gr.Label(label="Top-k Xác suất")
-            out_status = gr.Markdown(label="Trạng thái")
+theme = gr.themes.Soft(primary_hue="indigo", secondary_hue="blue", neutral_hue="slate")
 
-    btn_submit.click(predict_intent, inputs=[input_text, tau_slider], outputs=[out_decision, out_probs, out_status])
+with gr.Blocks(theme=theme, title="TMG - Vietnamese Intent & OOS Detection") as demo:
+    gr.Markdown(
+        """
+        # 🎙️ TMG: Hệ Thống Phân Loại Ý Định & Phát Hiện Ngoài Miền (OOS) Tiếng Việt
+        ### Nghiên cứu áp dụng PhoBERT-v2, K+1 Head, Data Augmentation và Temperature Scaling
+        **Chỉ số kiểm thử thực tế:** In-scope Accuracy: **88.34%** | OOS AUROC: **76.92%**
+        """
+    )
+    
+    with gr.Row():
+        with gr.Column(scale=5):
+            input_text = gr.Textbox(
+                label="📝 Nhập phát ngôn người dùng (User Utterance):",
+                placeholder="Gõ thử: 'hủy báo thức 6h sáng mai', 'chơi bài Sơn Tùng',...",
+                lines=2
+            )
+            tau_slider = gr.Slider(
+                minimum=0.0, maximum=1.0, value=0.70, step=0.01,
+                label="🎚️ Ngưỡng tin cậy an toàn (Threshold τ):",
+                info="Nếu max probability < τ, hệ thống cảnh báo Out-of-Scope (OOS)."
+            )
+            btn_submit = gr.Button("⚡ Phân tích ý định", variant="primary")
+            
+            gr.Examples(
+                examples=[
+                    ["bật cho tôi bài hát Lạc Trôi của Sơn Tùng", 0.70],
+                    ["đặt báo thức lúc sáu giờ sáng mai", 0.70],
+                    ["xem lịch họp buổi chiều nay có những gì", 0.70],
+                    ["tat den phong khach giup toi", 0.70],
+                    ["mai có mưa không em", 0.70],
+                    ["cổ phiếu Vinfast hôm nay giá bao nhiêu tiền", 0.70],
+                    ["hôm nay ăn gì ngon bổ rẻ", 0.70],
+                    ["hủy toàn bộ lịch bay của tôi", 0.70]
+                ],
+                inputs=[input_text, tau_slider],
+                label="💡 Các câu ví dụ thử nghiệm (In-scope & OOS):"
+            )
+
+        with gr.Column(scale=5):
+            out_decision = gr.Label(label="📌 Quyết Định Hệ Thống", num_top_classes=1)
+            out_probs = gr.Label(label="📊 Top-5 Xác Suất Ý Định (Calibrated Confidence)")
+            out_status = gr.Markdown(label="📢 Thông báo trạng thái")
+
+    btn_submit.click(
+        fn=predict_intent,
+        inputs=[input_text, tau_slider],
+        outputs=[out_decision, out_probs, out_status]
+    )
 
 if __name__ == "__main__":
     demo.launch()
