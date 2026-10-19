@@ -5,56 +5,56 @@ from pyvi import ViTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from huggingface_hub import hf_hub_download
 
-# Tên Repository chính thức trên Hugging Face
 MODEL_NAME = "John-asd123/vietnamese-intent-p4"
 
+st.set_page_config(
+    page_title="Vietnamese Intent & OOS Detection",
+    page_icon="🎙️",
+    layout="wide"
+)
+
+st.title("🎙️ Hệ Thống Phân Loại Ý Định & Phát Hiện Ngoài Miền (OOS)")
+st.markdown("**Mô hình:** PhoBERT-v2 (Fine-tuned P4) | **Số lượng nhãn:** 41 Intent")
+
 @st.cache_resource
-def load_model():
+def load_model_and_tokenizer():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # 1. Tải Tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    
-    # 2. Tải chính xác file trọng số 1.11 GB trực tiếp qua Hugging Face Hub Client (Bỏ qua Git LFS pointer)
-    # Dùng hf_hub_download để đảm bảo tải đủ 1.11 GB thực tế
-    model_weight_path = hf_hub_download(repo_id=MODEL_NAME, filename="model.safetensors")
-    config_path = hf_hub_download(repo_id=MODEL_NAME, filename="config.json")
-    
-    # Load model trực tiếp từ repo Hugging Face
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME,
-        use_safetensors=True
-    )
-    
+    with st.spinner("Đang tải Tokenizer và Model từ Hugging Face (có thể mất 1-2 phút cho lần đầu)..."):
+        # Tải tường minh file trọng số lớn và config để tránh lỗi LFS pointer trên Cloud
+        hf_hub_download(repo_id=MODEL_NAME, filename="model.safetensors")
+        hf_hub_download(repo_id=MODEL_NAME, filename="config.json")
+        
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+        
     model.to(device)
     model.eval()
     return tokenizer, model, device
 
-# Tải mô hình
 try:
-    with st.spinner("Đang tải mô hình từ Hugging Face... Vui lòng đợi trong giây lát..."):
-        tokenizer, model, device = load_model()
+    tokenizer, model, device = load_model_and_tokenizer()
     has_model = True
-    st.success("✅ Đã tải mô hình thành công!")
+    st.success("✅ Tải mô hình và trọng số thành công!")
 except Exception as e:
-    st.error(f"⚠️ Chưa tải được mô hình: {e}")
+    st.error(f"⚠️ Lỗi khi tải mô hình: {e}")
     has_model = False
 
-# Sidebar cấu hình ngưỡng
+# Sidebar cấu hình ngưỡng OOS
 st.sidebar.header("⚙️ Cấu hình hệ thống")
 tau_threshold = st.sidebar.slider(
     "Ngưỡng tin cậy an toàn (Threshold τ):",
     min_value=0.0, max_value=1.0, value=0.70, step=0.01,
-    help="Nếu xác suất cao nhất < τ hoặc nhãn dự đoán là out_of_scope, hệ thống sẽ cảnh báo Ngoài miền (OOS)."
+    help="Nếu xác suất cao nhất < τ hoặc nhãn là out_of_scope, hệ thống sẽ cảnh báo Ngoài miền."
 )
 
-# Giao diện chính
+# Giao diện nhập liệu
 col1, col2 = st.columns([1, 1])
 
 with col1:
     st.subheader("📝 Nhập câu lệnh")
     example_selected = st.selectbox(
-        "💡 Chọn câu ví dụ mẫu để test nhanh:",
+        "💡 Chọn câu ví dụ mẫu:",
         [
             "-- Tự nhập câu lệnh --",
             "đặt báo thức lúc sáu giờ sáng mai",
@@ -62,57 +62,55 @@ with col1:
             "xem lịch họp buổi chiều nay có những gì",
             "tat den phong khach giup toi",
             "mai có mưa không em",
-            "cổ phiếu Vinfast hôm nay giá bao nhiêu tiền",
-            "hôm nay ăn gì ngon bổ rẻ"
+            "cổ phiếu Vinfast hôm nay giá bao nhiêu tiền"
         ]
     )
     
     default_text = "" if example_selected == "-- Tự nhập câu lệnh --" else example_selected
-    input_text = st.text_area("Nội dung câu lệnh:", value=default_text, height=100, placeholder="Gõ câu lệnh tại đây...")
+    input_text = st.text_area("Nội dung câu lệnh:", value=default_text, height=100)
     btn_predict = st.button("⚡ Phân tích ý định", type="primary")
 
 with col2:
     st.subheader("📊 Kết quả phân tích")
     
     if btn_predict and input_text.strip():
-        # Tách từ tiếng Việt qua PyVi
-        segmented_text = ViTokenizer.tokenize(input_text.strip())
-        
         if has_model:
+            # Tiền xử lý tiếng Việt bằng PyVi
+            segmented_text = ViTokenizer.tokenize(input_text.strip())
+            
             inputs = tokenizer(segmented_text, return_tensors="pt", truncation=True, max_length=128).to(device)
             with torch.no_grad():
                 logits = model(**inputs).logits
                 probs = F.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
                 
-            # Trích xuất id2label từ config của mô hình
+            # Lấy ánh xạ id2label chuẩn từ model config
             id2label = getattr(model.config, "id2label", None)
             if id2label:
-                # Ép kiểu index về str/int để lấy đúng nhãn
                 prob_dict = {
                     id2label.get(str(i), id2label.get(i, f"class_{i}")): float(probs[i])
                     for i in range(len(probs))
                 }
             else:
-                prob_dict = {DEFAULT_LABELS[i]: float(probs[i]) for i in range(min(len(probs), len(DEFAULT_LABELS)))}
-        else:
-            prob_dict = {label: 1.0 / len(DEFAULT_LABELS) for label in DEFAULT_LABELS}
+                prob_dict = {f"class_{i}": float(probs[i]) for i in range(len(probs))}
+                
+            # Sắp xếp kết quả giảm dần theo xác suất
+            sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
+            top_intent, max_p = sorted_probs[0]
             
-        # Sắp xếp các intent theo xác suất giảm dần
-        sorted_probs = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)
-        top_intent, max_p = sorted_probs[0]
-        
-        # Kiểm tra điều kiện OOS
-        is_oos = (max_p < tau_threshold) or (top_intent == "out_of_scope")
-        
-        if is_oos:
-            st.error(f"🚨 **CẢNH BÁO: CÂU LỆNH NGOÀI MIỀN (OUT-OF-SCOPE / UNKNOWN)**")
-            st.info(f"- Độ tin cậy tối đa: `{max_p:.2%}` < Ngưỡng an toàn τ (`{tau_threshold:.2%}`)")
-        else:
-            st.success(f"✅ **XÁC NHẬN: Ý ĐỊNH HỢP LỆ (IN-SCOPE)**")
-            st.markdown(f"- Ý định: **{top_intent}**")
-            st.markdown(f"- Độ tin cậy: `{max_p:.2%}`")
+            # Kiểm tra ngưỡng OOS
+            is_oos = (max_p < tau_threshold) or (top_intent == "out_of_scope")
             
-        st.markdown("---")
-        st.write("**Top-5 Xác suất ý định:**")
-        for intent_name, p_val in sorted_probs[:5]:
-            st.progress(float(p_val), text=f"{intent_name}: {p_val:.2%}")
+            if is_oos:
+                st.error(f"🚨 **CẢNH BÁO: CÂU LỆNH NGOÀI MIỀN (OUT-OF-SCOPE)**")
+                st.info(f"- Độ tin cậy tối đa: `{max_p:.2%}` < Ngưỡng an toàn τ (`{tau_threshold:.2%}`)")
+            else:
+                st.success(f"✅ **XÁC NHẬN: Ý ĐỊNH HỢP LỆ (IN-SCOPE)**")
+                st.markdown(f"- Ý định dự đoán: **{top_intent}**")
+                st.markdown(f"- Độ tin cậy: `{max_p:.2%}`")
+                
+            st.markdown("---")
+            st.write("**Top-5 Xác suất ý định:**")
+            for intent_name, p_val in sorted_probs[:5]:
+                st.progress(float(p_val), text=f"{intent_name}: {p_val:.2%}")
+        else:
+            st.warning("Mô hình chưa sẵn sàng để dự đoán.")
