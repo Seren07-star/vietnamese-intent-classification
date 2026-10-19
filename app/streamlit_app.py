@@ -23,18 +23,29 @@ st.markdown("**Mô hình:** PhoBERT-v2 (Fine-tuned P4) | **Số lượng nhãn:*
 def load_model_and_tokenizer():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Kiểm tra xem đã giải nén sẵn chưa, nếu chưa thì tải file zip từ Hugging Face
-    if not os.path.exists(LOCAL_DIR) or not os.path.exists(os.path.join(LOCAL_DIR, "config.json")):
+    target_model_path = LOCAL_DIR
+    
+    # Nếu chưa giải nén hoặc chưa có file trọng số
+    if not os.path.exists(LOCAL_DIR) or not os.path.exists(os.path.join(LOCAL_DIR, "model.safetensors")):
         os.makedirs(LOCAL_DIR, exist_ok=True)
-        with st.spinner("📥 Đang tải gói mô hình từ Hugging Face (chỉ mất 1 lần duy nhất)..."):
+        with st.spinner("📥 Đang tải gói mô hình từ Hugging Face..."):
             zip_path = hf_hub_download(repo_id=MODEL_NAME, filename="model_p4.zip")
             
         with st.spinner("📦 Đang giải nén mô hình..."):
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(LOCAL_DIR)
                 
-    tokenizer = AutoTokenizer.from_pretrained(LOCAL_DIR)
-    model = AutoModelForSequenceClassification.from_pretrained(LOCAL_DIR)
+    # 🔍 Tự động quét xem file model.safetensors nằm ở đâu (tránh lỗi lệch tầng thư mục nén)
+    if not os.path.exists(os.path.join(target_model_path, "model.safetensors")):
+        for root, dirs, files in os.walk(LOCAL_DIR):
+            if "model.safetensors" in files:
+                target_model_path = root
+                break
+
+    st.write(f"📂 Đường dẫn load model thực tế: `{target_model_path}`")
+    
+    tokenizer = AutoTokenizer.from_pretrained(target_model_path)
+    model = AutoModelForSequenceClassification.from_pretrained(target_model_path)
     
     model.to(device)
     model.eval()
@@ -43,7 +54,7 @@ def load_model_and_tokenizer():
 try:
     tokenizer, model, device = load_model_and_tokenizer()
     has_model = True
-    st.success("✅ Tải mô hình và trọng số thành công từ gói nén!")
+    st.success("✅ Tải mô hình và trọng số thành công!")
 except Exception as e:
     st.error(f"⚠️ Lỗi khi tải mô hình: {e}")
     has_model = False
