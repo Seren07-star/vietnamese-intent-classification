@@ -3,4 +3,4 @@ torch
 transformers
 pyvi
 huggingface_hub>=0.20.0
-accelerate
+safetensors
