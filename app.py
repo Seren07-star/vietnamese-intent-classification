@@ -29,17 +29,14 @@ TAU_CONF = 0.9400
 GDRIVE_FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"
 
 
-# 2. TỰ ĐỘNG TẢI TRỌNG SỐ TỪ GOOGLE DRIVE
+# 2. HÀM TẢI TRỌNG SỐ TỰ ĐỘNG TỪ GOOGLE DRIVE
 def ensure_checkpoint_exists():
   ckpt_dir = "checkpoints"
   os.makedirs(ckpt_dir, exist_ok=True)
   ckpt_path = os.path.join(ckpt_dir, "p4_phobert_best.pt")
 
   if not os.path.exists(ckpt_path) or os.path.getsize(ckpt_path) < 1000000:
-    with st.spinner(
-        "⏳ Đang tải trọng số mô hình P4 từ Google Drive (khoảng 30 giây cho lần"
-        " đầu)..."
-    ):
+    with st.spinner("⏳ Đang tải trọng số mô hình P4 từ Google Drive..."):
       url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
       gdown.download(url, ckpt_path, quiet=False)
   return ckpt_path
@@ -133,25 +130,58 @@ def load_nlu_system():
 in_scope_labels = [p4_id2label[i] for i in in_scope_indices]
 
 
-# 5. SIDEBAR: CHUYỂN ĐỔI GIAO DIỆN SÁNG / TỐI & CÀI ĐẶT
+# 5. SIDEBAR: CHUYỂN ĐỔI GIAO DIỆN & ÉP MÀU CHỮ TOÀN DIỆN
 with st.sidebar:
   st.title("⚙️ Điều Khiển & Cài Đặt")
 
   theme_mode = st.radio(
       "🎨 Chế độ hiển thị:",
-      ["🌙 Giao diện Tối (Dark)", "☀️ Giao diện Sáng (Light)"],
+      ["☀️ Giao diện Sáng (Light)", "🌙 Giao diện Tối (Dark)"],
       index=0,
   )
 
-  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN THEO LỰA CHỌN
+  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN VÀ MÀU CHỮ (KHÔNG BAO GIỜ BỊ BAY MÀU)
   if "Light" in theme_mode:
     st.markdown(
         """
             <style>
-            .stApp { background-color: #FFFFFF; color: #111827; }
-            .stTextArea textarea { background-color: #F9FAFB !important; color: #111827 !important; border: 1px solid #D1D5DB !important; }
-            .stButton button { background-color: #F3F4F6; color: #111827; border: 1px solid #D1D5DB; }
-            [data-testid="stSidebar"] { background-color: #F3F4F6 !important; }
+            /* NỀN VÀ CHỮ TOÀN BỘ TRANG SÁNG */
+            .stApp, .stApp header, [data-testid="stSidebar"] {
+                background-color: #F8FAFC !important;
+                color: #0F172A !important;
+            }
+            /* TOÀN BỘ VĂN BẢN, TIÊU ĐỀ, NHÃN ĐỔI SANG MÀU ĐEN ĐẬM */
+            h1, h2, h3, h4, h5, h6, p, span, label, div {
+                color: #0F172A !important;
+            }
+            /* THANH SIDEBAR */
+            [data-testid="stSidebar"] {
+                background-color: #F1F5F9 !important;
+                border-right: 1px solid #CBD5E1 !important;
+            }
+            /* Ô NHẬP LIỆU TEXTAREA */
+            .stTextArea textarea {
+                background-color: #FFFFFF !important;
+                color: #0F172A !important;
+                border: 1.5px solid #94A3B8 !important;
+                font-weight: 500 !important;
+            }
+            /* NÚT BẤM S1 - S6 */
+            .stButton button {
+                background-color: #FFFFFF !important;
+                color: #1E293B !important;
+                border: 1px solid #94A3B8 !important;
+                font-weight: 600 !important;
+            }
+            .stButton button:hover {
+                background-color: #E2E8F0 !important;
+                border-color: #475569 !important;
+            }
+            /* SLIDER LABELS & THÔNG SỐ */
+            .stSlider label, .stSlider div {
+                color: #0F172A !important;
+                font-weight: 600 !important;
+            }
             </style>
         """,
         unsafe_allow_html=True,
@@ -160,14 +190,59 @@ with st.sidebar:
     st.markdown(
         """
             <style>
-            .stApp { background-color: #0E1117; color: #FAFAFA; }
-            .stTextArea textarea { background-color: #1F2937 !important; color: #F9FAFB !important; border: 1px solid #374151 !important; }
-            .stButton button { background-color: #1F2937; color: #F9FAFB; border: 1px solid #374151; }
-            [data-testid="stSidebar"] { background-color: #161B22 !important; }
+            /* NỀN VÀ CHỮ TOÀN BỘ TRANG TỐI */
+            .stApp, .stApp header, [data-testid="stSidebar"] {
+                background-color: #0B0F19 !important;
+                color: #F8FAFC !important;
+            }
+            h1, h2, h3, h4, h5, h6, p, span, label, div {
+                color: #F8FAFC !important;
+            }
+            [data-testid="stSidebar"] {
+                background-color: #111827 !important;
+                border-right: 1px solid #1F2937 !important;
+            }
+            .stTextArea textarea {
+                background-color: #1F2937 !important;
+                color: #F8FAFC !important;
+                border: 1.5px solid #374151 !important;
+            }
+            .stButton button {
+                background-color: #1F2937 !important;
+                color: #F8FAFC !important;
+                border: 1px solid #374151 !important;
+            }
+            .stButton button:hover {
+                background-color: #374151 !important;
+            }
+            .stSlider label, .stSlider div {
+                color: #F8FAFC !important;
+            }
             </style>
         """,
         unsafe_allow_html=True,
     )
+
+  # ÉP RIÊNG NÚT DỰ ĐOÁN LUÔN CÓ MÀU XANH DƯƠNG NỔI BẬT CHỮ TRẮNG
+  st.markdown(
+      """
+        <style>
+        div.stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            font-size: 1.1em !important;
+            font-weight: 700 !important;
+            padding: 10px 24px !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+        }
+        div.stButton > button[kind="primary"]:hover {
+            background: linear-gradient(135deg, #1D4ED8, #1E40AF) !important;
+        }
+        </style>
+    """,
+      unsafe_allow_html=True,
+  )
 
   st.markdown("---")
   st.subheader("🎛️ Tinh Chỉnh Ngưỡng")
@@ -271,7 +346,7 @@ with tab_demo:
           args=("hôm nay thị trường chứng khoán thế nào",),
       )
 
-    # NÚT BẤM DUY NHẤT ĐỂ KÍCH HOẠT SUY LUẬN
+    # NÚT BẤM KÍCH HOẠT SUY LUẬN
     btn_predict = st.button(
         "🚀 Phân Loại Ý Định", type="primary", use_container_width=True
     )
