@@ -138,7 +138,7 @@ with st.sidebar:
       index=0,
   )
 
-  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN VÀ MÀU CHỮ (KHÔNG BAO GIỜ BỊ BAY MÀU)
+  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN VÀ MÀU CHỮ
   if "Light" in theme_mode:
     st.markdown(
         """
