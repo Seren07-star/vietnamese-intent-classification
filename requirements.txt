@@ -4,4 +4,4 @@ transformers
 pyvi
 numpy
 pandas
-requests
+gdown
