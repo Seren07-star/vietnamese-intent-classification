@@ -19,12 +19,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 1. SIÊU THAM SỐ TỐI ƯU
+# 1. SIÊU THAM SỐ TỐI ƯU TỪ BÀI BÁO
 PHOBERT_MODEL = "vinai/phobert-base-v2"
 T_OPT = 1.0462
 TAU_OOS = 0.0596
-TAU_CONF = 0.8500  # Ngưỡng 0.85 giúp câu S1 (91.26%) và S2 (86.77%) bật XANH chuẩn xác!
+TAU_CONF = 0.9400
 
+# FILE ID TỪ GOOGLE DRIVE
 GDRIVE_FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"
 
 
@@ -41,50 +42,51 @@ def ensure_checkpoint_exists():
   return ckpt_path
 
 
-# 3. DANH SÁCH 41 NHÃN CHUẨN XÁC TỪ FILE JSON NOTEBOOK CỦA BẠN
-REAL_P4_LABELS = [
+# 3. DANH SÁCH ĐÚNG 41 NHÃN CHUẨN XÁC TỪNG VỊ TRÍ INDEX CỦA CELL 16
+# (alarm_set, cooking_recipe... đã rút làm OOS, đúng 40 In-Scope + out_of_scope)
+P4_CANONICAL_LABELS = sorted([
     "alarm_query",
     "alarm_remove",
-    "audio_volume_down",
-    "audio_volume_mute",
-    "audio_volume_other",
-    "audio_volume_up",
+    "audiobook_pause",
+    "audiobook_play",
     "calendar_query",
-    "calendar_set",
-    "cooking_recipe",
+    "calendar_remove",
+    "cooking_query",
     "datetime_query",
     "email_addcontact",
     "email_query",
+    "email_querycontact",
+    "email_reply",
     "email_sendemail",
-    "general_greet",
+    "general_joke",
     "general_quirky",
     "iot_cleaning",
-    "iot_coffee",
     "iot_hue_lightchange",
     "iot_hue_lightdim",
     "iot_hue_lightoff",
-    "iot_hue_lightup",
+    "iot_hue_lighton",
     "iot_wemo_off",
-    "iot_wemo_on",
-    "lists_createoradd",
-    "lists_remove",
-    "music_dislikeness",
-    "music_likeness",
+    "music_query",
     "music_settings",
     "news_query",
-    "out_of_scope",
-    "play_audiobook",
-    "play_game",
-    "play_music",
-    "play_podcasts",
+    "qa_definition",
+    "qa_factoid",
+    "qa_maths",
+    "qa_stock",
+    "recommendation_events",
+    "recommendation_locations",
+    "recommendation_movies",
+    "social_post",
     "social_query",
     "takeaway_query",
-    "transport_query",
-    "transport_taxi",
     "transport_ticket",
     "transport_traffic",
     "weather_query",
-]
+    "play_radio",
+    "play_music",
+    "play_podcasts",
+    "out_of_scope",
+])
 
 
 # 4. KHỞI TẠO HỆ THỐNG VÀ CACHE VÀO RAM
@@ -94,7 +96,7 @@ def load_nlu_system():
   device = torch.device("cpu")
 
   tokenizer = AutoTokenizer.from_pretrained(PHOBERT_MODEL)
-  p4_labels = REAL_P4_LABELS
+  p4_labels = P4_CANONICAL_LABELS
 
   model = AutoModelForSequenceClassification.from_pretrained(
       PHOBERT_MODEL, num_labels=len(p4_labels), weights_only=False
@@ -109,7 +111,7 @@ def load_nlu_system():
     p.requires_grad = False
 
   p4_id2label = {i: lbl for i, lbl in enumerate(p4_labels)}
-  oos_idx = p4_labels.index("out_of_scope")  # Index 29 chuẩn xác!
+  oos_idx = p4_labels.index("out_of_scope")
   in_scope_indices = [
       i for i, lbl in enumerate(p4_labels) if lbl != "out_of_scope"
   ]
@@ -202,9 +204,6 @@ with st.sidebar:
                 color: #F8FAFC !important;
                 border: 1px solid #374151 !important;
             }
-            .stButton button:hover {
-                background-color: #374151 !important;
-            }
             .stSlider label, .stSlider div {
                 color: #F8FAFC !important;
             }
@@ -246,7 +245,6 @@ with st.sidebar:
       max_value=0.99,
       value=TAU_CONF,
       step=0.01,
-      help="Mặc định 0.85 giúp các câu khẩu lệnh chuẩn và không dấu xác nhận ngay!",
   )
   temp_val = st.slider(
       "Nhiệt độ hiệu chuẩn (T):",
@@ -330,7 +328,7 @@ with tab_demo:
       )
 
     btn_predict = st.button(
-        "🚀 Phân Loại Ý Định", type="primary", width="stretch"
+        "🚀 Phân Loại Ý Định", type="primary", use_container_width=True
     )
 
   with col_right:
@@ -373,30 +371,26 @@ with tab_demo:
         predicted_intent = p4_id2label[best_in_idx]
         best_conf = float(np.max(in_scope_probs))
 
-        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3) - SỬ DỤNG RAW STRING TRÁNH CẢNH BÁO ESCAPE
-        is_oos_decision = (oos_score >= tau_oos_val) or (
-            np.argmax(probs) == OOS_INDEX
-        )
-
-        if is_oos_decision:
-          st.error(rf"""
+        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3)
+        if oos_score >= tau_oos_val:
+          st.error(f"""
                     ### 🚨 TRẠNG THÁI 3: NGOÀI PHẠM VI (UNKNOWN / OOS)
-                    * **Điểm câu lạ (OOS Score):** `{oos_score*100:.2f}%` $\ge$ Ngưỡng $\tau_{{oos}}$ (`{tau_oos_val*100:.2f}%`)
+                    * **Điểm câu lạ (OOS Score):** `{oos_score*100:.2f}%` $\ge$ Ngưỡng $\\tau_{{oos}}$ (`{tau_oos_val*100:.2f}%`)
                     * **Hành động:** Từ chối xử lý và thông báo câu lệnh nằm ngoài phạm vi hỗ trợ của trợ lý ảo.
                     """)
         elif best_conf < tau_conf_val:
           top2_idx = np.argsort(norm_in_probs)[-2:][::-1]
           top2_names = [p4_id2label[in_scope_indices[i]] for i in top2_idx]
-          st.warning(rf"""
+          st.warning(f"""
                     ### ⚠️ TRẠNG THÁI 2: MƠ HỒ / ĐỘ TIN CẬY THẤP (CLARIFY)
-                    * **Độ tự tin:** `{best_conf*100:.2f}%` $<$ Ngưỡng tự tin $\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
+                    * **Độ tự tin:** `{best_conf*100:.2f}%` $<$ Ngưỡng tự tin $\\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
                     * **Hành động:** Gợi ý hỏi lại người dùng: *Có phải bạn muốn `{top2_names[0]}` hoặc `{top2_names[1]}`?*
                     """)
         else:
-          st.success(rf"""
+          st.success(f"""
                     ### ✅ TRẠNG THÁI 1: ĐỦ TIN CẬY — XÁC NHẬN Ý ĐỊNH
                     * **Ý định xác định:** `{predicted_intent}`
-                    * **Độ tin cậy:** `{best_conf*100:.2f}%` $\ge$ Ngưỡng $\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
+                    * **Độ tin cậy:** `{best_conf*100:.2f}%` $\ge$ Ngưỡng $\\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
                     * **Hành động:** Tự động điều phối và thực thi tác vụ thành công.
                     """)
 
@@ -414,7 +408,7 @@ with tab_demo:
       )
 
 with tab_labels:
-  st.subheader("📋 Không Gian Nhãn Thật (Giao thức Open-Intent)")
+  st.subheader("📋 Không Gian Nhãn (Giao thức Open-Intent)")
   col_l1, col_l2 = st.columns(2)
   with col_l1:
     st.markdown("#### ✅ 40 Ý Định Trong Phạm Vi (In-Scope)")
@@ -423,20 +417,20 @@ with tab_labels:
             {"STT": range(1, len(in_scope_labels) + 1), "Intent": in_scope_labels}
         ),
         height=380,
-        width="stretch",
+        use_container_width=True,
     )
   with col_l2:
-    st.markdown("#### 🚫 Các Ý Định Ngoài Phạm Vi Tiêu Biểu (OOS)")
+    st.markdown("#### 🚫 Các Ý Định Ngoài Phạm Vi (OOS)")
     oos_samples = [
         "alarm_set (Bị rút làm OOS)",
-        "calendar_remove",
-        "audiobook_stop",
-        "cooking_query",
-        "social_post",
-        "qa_maths (Toán học)",
-        "qa_stock (Tài chính / Chứng khoán)",
-        "general_joke",
-        "recommendation_locations",
+        "cooking_recipe (Nấu ăn)",
+        "general_greet (Chào hỏi)",
+        "iot_coffee (Pha cà phê)",
+        "music_likeness (Đánh giá nhạc)",
+        "takeaway_order (Đặt món ăn)",
+        "transport_taxi (Gọi xe taxi)",
+        "datetime_convert (Đổi giờ)",
+        "recommendation_events (Sự kiện)",
     ]
     st.dataframe(
         pd.DataFrame({
@@ -444,7 +438,7 @@ with tab_labels:
             "Intent Ngoài Phạm Vi": oos_samples,
         }),
         height=380,
-        width="stretch",
+        use_container_width=True,
     )
 
 with tab_about:
