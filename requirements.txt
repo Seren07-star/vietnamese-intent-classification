@@ -2,5 +2,6 @@ streamlit
 torch
 transformers
 pyvi
-huggingface_hub>=0.20.0
-safetensors
+numpy
+pandas
+requests
