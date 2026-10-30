@@ -25,7 +25,7 @@ T_OPT = 1.0462
 TAU_OOS = 0.0596
 TAU_CONF = 0.9400
 
-# FILE ID TỪ DRIVE CỦA BẠN
+# FILE ID TỪ GOOGLE DRIVE
 GDRIVE_FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"
 
 
@@ -42,37 +42,30 @@ def ensure_checkpoint_exists():
   return ckpt_path
 
 
-# 3. DANH SÁCH 41 NHÃN CHUẨN ĐÃ HỌC
-P4_LABELS_CANONICAL = sorted([
+# 3. DANH SÁCH ĐÚNG 41 NHÃN CHUẨN XÁC TỪNG VỊ TRÍ INDEX CỦA CELL 16
+# (alarm_set, cooking_recipe... đã rút làm OOS, đúng 40 In-Scope + out_of_scope)
+P4_CANONICAL_LABELS = sorted([
     "alarm_query",
     "alarm_remove",
-    "alarm_set",
     "audiobook_pause",
     "audiobook_play",
     "calendar_query",
     "calendar_remove",
-    "calendar_set",
     "cooking_query",
-    "cooking_recipe",
-    "datetime_convert",
     "datetime_query",
     "email_addcontact",
     "email_query",
     "email_querycontact",
     "email_reply",
     "email_sendemail",
-    "general_greet",
     "general_joke",
     "general_quirky",
     "iot_cleaning",
-    "iot_coffee",
     "iot_hue_lightchange",
     "iot_hue_lightdim",
     "iot_hue_lightoff",
     "iot_hue_lighton",
     "iot_wemo_off",
-    "iot_wemo_on",
-    "music_likeness",
     "music_query",
     "music_settings",
     "news_query",
@@ -84,6 +77,14 @@ P4_LABELS_CANONICAL = sorted([
     "recommendation_locations",
     "recommendation_movies",
     "social_post",
+    "social_query",
+    "takeaway_query",
+    "transport_ticket",
+    "transport_traffic",
+    "weather_query",
+    "play_radio",
+    "play_music",
+    "play_podcasts",
     "out_of_scope",
 ])
 
@@ -95,7 +96,7 @@ def load_nlu_system():
   device = torch.device("cpu")
 
   tokenizer = AutoTokenizer.from_pretrained(PHOBERT_MODEL)
-  p4_labels = P4_LABELS_CANONICAL
+  p4_labels = P4_CANONICAL_LABELS
 
   model = AutoModelForSequenceClassification.from_pretrained(
       PHOBERT_MODEL, num_labels=len(p4_labels), weights_only=False
@@ -129,8 +130,7 @@ def load_nlu_system():
 ) = load_nlu_system()
 in_scope_labels = [p4_id2label[i] for i in in_scope_indices]
 
-
-# 5. SIDEBAR: CHUYỂN ĐỔI GIAO DIỆN & ÉP MÀU CHỮ TOÀN DIỆN
+# 5. SIDEBAR: CHUYỂN ĐỔI GIAO DIỆN & CÀI ĐẶT
 with st.sidebar:
   st.title("⚙️ Điều Khiển & Cài Đặt")
 
@@ -140,33 +140,28 @@ with st.sidebar:
       index=0,
   )
 
-  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN VÀ MÀU CHỮ (KHÔNG BAO GIỜ BỊ BAY MÀU)
+  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN VÀ MÀU CHỮ
   if "Light" in theme_mode:
     st.markdown(
         """
             <style>
-            /* NỀN VÀ CHỮ TOÀN BỘ TRANG SÁNG */
             .stApp, .stApp header, [data-testid="stSidebar"] {
                 background-color: #F8FAFC !important;
                 color: #0F172A !important;
             }
-            /* TOÀN BỘ VĂN BẢN, TIÊU ĐỀ, NHÃN ĐỔI SANG MÀU ĐEN ĐẬM */
             h1, h2, h3, h4, h5, h6, p, span, label, div {
                 color: #0F172A !important;
             }
-            /* THANH SIDEBAR */
             [data-testid="stSidebar"] {
                 background-color: #F1F5F9 !important;
                 border-right: 1px solid #CBD5E1 !important;
             }
-            /* Ô NHẬP LIỆU TEXTAREA */
             .stTextArea textarea {
                 background-color: #FFFFFF !important;
                 color: #0F172A !important;
                 border: 1.5px solid #94A3B8 !important;
                 font-weight: 500 !important;
             }
-            /* NÚT BẤM S1 - S6 */
             .stButton button {
                 background-color: #FFFFFF !important;
                 color: #1E293B !important;
@@ -175,9 +170,7 @@ with st.sidebar:
             }
             .stButton button:hover {
                 background-color: #E2E8F0 !important;
-                border-color: #475569 !important;
             }
-            /* SLIDER LABELS & THÔNG SỐ */
             .stSlider label, .stSlider div {
                 color: #0F172A !important;
                 font-weight: 600 !important;
@@ -190,7 +183,6 @@ with st.sidebar:
     st.markdown(
         """
             <style>
-            /* NỀN VÀ CHỮ TOÀN BỘ TRANG TỐI */
             .stApp, .stApp header, [data-testid="stSidebar"] {
                 background-color: #0B0F19 !important;
                 color: #F8FAFC !important;
@@ -212,9 +204,6 @@ with st.sidebar:
                 color: #F8FAFC !important;
                 border: 1px solid #374151 !important;
             }
-            .stButton button:hover {
-                background-color: #374151 !important;
-            }
             .stSlider label, .stSlider div {
                 color: #F8FAFC !important;
             }
@@ -223,7 +212,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-  # ÉP RIÊNG NÚT DỰ ĐOÁN LUÔN CÓ MÀU XANH DƯƠNG NỔI BẬT CHỮ TRẮNG
   st.markdown(
       """
         <style>
@@ -235,9 +223,6 @@ with st.sidebar:
             font-weight: 700 !important;
             padding: 10px 24px !important;
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
-        }
-        div.stButton > button[kind="primary"]:hover {
-            background: linear-gradient(135deg, #1D4ED8, #1E40AF) !important;
         }
         </style>
     """,
@@ -253,7 +238,6 @@ with st.sidebar:
       max_value=0.50,
       value=TAU_OOS,
       step=0.005,
-      help="Vượt ngưỡng này sẽ kích hoạt từ chối (OOS).",
   )
   tau_conf_val = st.slider(
       "Ngưỡng tin cậy (τ_conf):",
@@ -261,7 +245,6 @@ with st.sidebar:
       max_value=0.99,
       value=TAU_CONF,
       step=0.01,
-      help="Dưới ngưỡng này sẽ kích hoạt hỏi lại (Clarify).",
   )
   temp_val = st.slider(
       "Nhiệt độ hiệu chuẩn (T):",
@@ -269,7 +252,6 @@ with st.sidebar:
       max_value=2.0,
       value=T_OPT,
       step=0.05,
-      help="Làm phẳng xác suất chống overconfidence.",
   )
 
   st.markdown("---")
@@ -288,7 +270,6 @@ tab_demo, tab_labels, tab_about = st.tabs([
     "📑 Thông Tin Đề Tài",
 ])
 
-# HÀM CALLBACK CẬP NHẬT TRỰC TIẾP Ô NHẬP LIỆU KHI BẤM NÚT S1 - S6
 if "query_input_box" not in st.session_state:
   st.session_state.query_input_box = "hủy báo thức lúc sáu giờ sáng mai"
 
@@ -346,7 +327,6 @@ with tab_demo:
           args=("hôm nay thị trường chứng khoán thế nào",),
       )
 
-    # NÚT BẤM KÍCH HOẠT SUY LUẬN
     btn_predict = st.button(
         "🚀 Phân Loại Ý Định", type="primary", use_container_width=True
     )
@@ -381,7 +361,7 @@ with tab_demo:
         oos_score = float(probs[OOS_INDEX])
         in_scope_probs = probs[in_scope_indices]
 
-        # Chuẩn hóa in-scope về 100% để hiển thị Top-3 trực quan
+        # Chuẩn hóa in-scope về 100%
         sum_in = in_scope_probs.sum()
         norm_in_probs = (
             in_scope_probs / sum_in if sum_in > 0 else in_scope_probs
@@ -391,7 +371,7 @@ with tab_demo:
         predicted_intent = p4_id2label[best_in_idx]
         best_conf = float(np.max(in_scope_probs))
 
-        # QUYẾT ĐỊNH 3 TRẠNG THÁI
+        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3)
         if oos_score >= tau_oos_val:
           st.error(f"""
                     ### 🚨 TRẠNG THÁI 3: NGOÀI PHẠM VI (UNKNOWN / OOS)
@@ -440,15 +420,17 @@ with tab_labels:
         use_container_width=True,
     )
   with col_l2:
-    st.markdown("#### 🚫 Các Ý Định Ngoài Phạm Vi (OOS Tiêu Biểu)")
+    st.markdown("#### 🚫 Các Ý Định Ngoài Phạm Vi (OOS)")
     oos_samples = [
-        "qa_stock (Tài chính / Chứng khoán)",
-        "cooking_query (Nấu ăn)",
+        "alarm_set (Bị rút làm OOS)",
+        "cooking_recipe (Nấu ăn)",
+        "general_greet (Chào hỏi)",
+        "iot_coffee (Pha cà phê)",
+        "music_likeness (Đánh giá nhạc)",
+        "takeaway_order (Đặt món ăn)",
         "transport_taxi (Gọi xe taxi)",
-        "audiobook_stop (Dừng sách nói)",
-        "general_greet (Chào hỏi xã giao)",
-        "iot_coffee (Pha cà phê thông minh)",
-        "music_likeness (Đánh giá bài hát)",
+        "datetime_convert (Đổi giờ)",
+        "recommendation_events (Sự kiện)",
     ]
     st.dataframe(
         pd.DataFrame({
