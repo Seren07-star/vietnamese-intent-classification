@@ -19,13 +19,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 1. SIÊU THAM SỐ TỐI ƯU TỪ BÀI BÁO
+# 1. SIÊU THAM SỐ TỐI ƯU
 PHOBERT_MODEL = "vinai/phobert-base-v2"
 T_OPT = 1.0462
 TAU_OOS = 0.0596
-TAU_CONF = 0.9000  # Đặt 0.90 để câu khẩu lệnh chuẩn (>= 91%) lập tức bật XANH!
+TAU_CONF = 0.8500  # Ngưỡng 0.85 giúp câu S1 (91.26%) và S2 (86.77%) bật XANH chuẩn xác!
 
-# FILE ID TỪ DRIVE CỦA BẠN
 GDRIVE_FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"
 
 
@@ -42,7 +41,7 @@ def ensure_checkpoint_exists():
   return ckpt_path
 
 
-# 3. DANH SÁCH ĐÚNG 41 NHÃN THẬT 100% TỪ NOTEBOOK CỦA BẠN
+# 3. DANH SÁCH 41 NHÃN CHUẨN XÁC TỪ FILE JSON NOTEBOOK CỦA BẠN
 REAL_P4_LABELS = [
     "alarm_query",
     "alarm_remove",
@@ -247,7 +246,7 @@ with st.sidebar:
       max_value=0.99,
       value=TAU_CONF,
       step=0.01,
-      help="Mặc định 0.90 để câu khẩu lệnh chuẩn (>= 91%) xác nhận ngay!",
+      help="Mặc định 0.85 giúp các câu khẩu lệnh chuẩn và không dấu xác nhận ngay!",
   )
   temp_val = st.slider(
       "Nhiệt độ hiệu chuẩn (T):",
@@ -331,7 +330,7 @@ with tab_demo:
       )
 
     btn_predict = st.button(
-        "🚀 Phân Loại Ý Định", type="primary", use_container_width=True
+        "🚀 Phân Loại Ý Định", type="primary", width="stretch"
     )
 
   with col_right:
@@ -364,7 +363,7 @@ with tab_demo:
         oos_score = float(probs[OOS_INDEX])
         in_scope_probs = probs[in_scope_indices]
 
-        # Chuẩn hóa in-scope về 100% để hiển thị thanh xác suất Top-3 trực quan
+        # Chuẩn hóa in-scope về 100%
         sum_in = in_scope_probs.sum()
         norm_in_probs = (
             in_scope_probs / sum_in if sum_in > 0 else in_scope_probs
@@ -374,31 +373,30 @@ with tab_demo:
         predicted_intent = p4_id2label[best_in_idx]
         best_conf = float(np.max(in_scope_probs))
 
-        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3)
-        # Kích hoạt OOS nếu điểm OOS vượt ngưỡng HOẶC nhãn có xác suất cao nhất chính là out_of_scope
+        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3) - SỬ DỤNG RAW STRING TRÁNH CẢNH BÁO ESCAPE
         is_oos_decision = (oos_score >= tau_oos_val) or (
             np.argmax(probs) == OOS_INDEX
         )
 
         if is_oos_decision:
-          st.error(f"""
+          st.error(rf"""
                     ### 🚨 TRẠNG THÁI 3: NGOÀI PHẠM VI (UNKNOWN / OOS)
-                    * **Điểm câu lạ (OOS Score):** `{oos_score*100:.2f}%` $\ge$ Ngưỡng $\\tau_{{oos}}$ (`{tau_oos_val*100:.2f}%`)
+                    * **Điểm câu lạ (OOS Score):** `{oos_score*100:.2f}%` $\ge$ Ngưỡng $\tau_{{oos}}$ (`{tau_oos_val*100:.2f}%`)
                     * **Hành động:** Từ chối xử lý và thông báo câu lệnh nằm ngoài phạm vi hỗ trợ của trợ lý ảo.
                     """)
         elif best_conf < tau_conf_val:
           top2_idx = np.argsort(norm_in_probs)[-2:][::-1]
           top2_names = [p4_id2label[in_scope_indices[i]] for i in top2_idx]
-          st.warning(f"""
+          st.warning(rf"""
                     ### ⚠️ TRẠNG THÁI 2: MƠ HỒ / ĐỘ TIN CẬY THẤP (CLARIFY)
-                    * **Độ tự tin:** `{best_conf*100:.2f}%` $<$ Ngưỡng tự tin $\\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
+                    * **Độ tự tin:** `{best_conf*100:.2f}%` $<$ Ngưỡng tự tin $\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
                     * **Hành động:** Gợi ý hỏi lại người dùng: *Có phải bạn muốn `{top2_names[0]}` hoặc `{top2_names[1]}`?*
                     """)
         else:
-          st.success(f"""
+          st.success(rf"""
                     ### ✅ TRẠNG THÁI 1: ĐỦ TIN CẬY — XÁC NHẬN Ý ĐỊNH
                     * **Ý định xác định:** `{predicted_intent}`
-                    * **Độ tin cậy:** `{best_conf*100:.2f}%` $\ge$ Ngưỡng $\\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
+                    * **Độ tin cậy:** `{best_conf*100:.2f}%` $\ge$ Ngưỡng $\tau_{{conf}}$ (`{tau_conf_val*100:.2f}%`)
                     * **Hành động:** Tự động điều phối và thực thi tác vụ thành công.
                     """)
 
@@ -425,7 +423,7 @@ with tab_labels:
             {"STT": range(1, len(in_scope_labels) + 1), "Intent": in_scope_labels}
         ),
         height=380,
-        use_container_width=True,
+        width="stretch",
     )
   with col_l2:
     st.markdown("#### 🚫 Các Ý Định Ngoài Phạm Vi Tiêu Biểu (OOS)")
@@ -446,7 +444,7 @@ with tab_labels:
             "Intent Ngoài Phạm Vi": oos_samples,
         }),
         height=380,
-        use_container_width=True,
+        width="stretch",
     )
 
 with tab_about:
