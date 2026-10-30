@@ -25,11 +25,11 @@ T_OPT = 1.0462
 TAU_OOS = 0.0596
 TAU_CONF = 0.9400
 
-# FILE ID CHUẨN XÁC TỪ GOOGLE DRIVE CỦA BẠN
+# FILE ID TỪ DRIVE CỦA BẠN
 GDRIVE_FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"
 
 
-# 2. HÀM TẢI TRỌNG SỐ TỰ ĐỘNG TỪ GOOGLE DRIVE
+# 2. TỰ ĐỘNG TẢI TRỌNG SỐ TỪ GOOGLE DRIVE
 def ensure_checkpoint_exists():
   ckpt_dir = "checkpoints"
   os.makedirs(ckpt_dir, exist_ok=True)
@@ -45,7 +45,7 @@ def ensure_checkpoint_exists():
   return ckpt_path
 
 
-# 3. DANH SÁCH 41 NHÃN CHUẨN (ĐÃ TỰ ĐỘNG NẠP DANH MỤC INTENT THẬT)
+# 3. DANH SÁCH 41 NHÃN CHUẨN ĐÃ HỌC
 P4_LABELS_CANONICAL = sorted([
     "alarm_query",
     "alarm_remove",
@@ -91,7 +91,7 @@ P4_LABELS_CANONICAL = sorted([
 ])
 
 
-# 4. KHỞI TẠO HỆ THỐNG VÀ CACHE VÀO BỘ NHỚ RAM
+# 4. KHỞI TẠO HỆ THỐNG VÀ CACHE VÀO RAM
 @st.cache_resource(show_spinner="⏳ Đang nạp mô hình PhoBERT vào bộ nhớ...")
 def load_nlu_system():
   ckpt_file = ensure_checkpoint_exists()
@@ -100,16 +100,13 @@ def load_nlu_system():
   tokenizer = AutoTokenizer.from_pretrained(PHOBERT_MODEL)
   p4_labels = P4_LABELS_CANONICAL
 
-  # Nạp cấu trúc model 41 nhãn
   model = AutoModelForSequenceClassification.from_pretrained(
       PHOBERT_MODEL, num_labels=len(p4_labels), weights_only=False
   ).to(device)
 
-  # Nạp trọng số thật từ file .pt tải từ Drive
   if os.path.exists(ckpt_file):
     state_dict = torch.load(ckpt_file, map_location=device)
     model.load_state_dict(state_dict)
-    print("✅ Đã nạp thành công trọng số P4 từ Google Drive!")
 
   model.eval()
   for p in model.parameters():
@@ -136,16 +133,41 @@ def load_nlu_system():
 in_scope_labels = [p4_id2label[i] for i in in_scope_indices]
 
 
-# 5. THANH BÊN (SIDEBAR): GIAO DIỆN SÁNG/TỐI & CÀI ĐẶT
+# 5. SIDEBAR: CHUYỂN ĐỔI GIAO DIỆN SÁNG / TỐI & CÀI ĐẶT
 with st.sidebar:
   st.title("⚙️ Điều Khiển & Cài Đặt")
 
-  # CHẾ ĐỘ SÁNG / TỐI (LIGHT / DARK THEME TOGGLE)
   theme_mode = st.radio(
       "🎨 Chế độ hiển thị:",
       ["🌙 Giao diện Tối (Dark)", "☀️ Giao diện Sáng (Light)"],
       index=0,
   )
+
+  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN THEO LỰA CHỌN
+  if "Light" in theme_mode:
+    st.markdown(
+        """
+            <style>
+            .stApp { background-color: #FFFFFF; color: #111827; }
+            .stTextArea textarea { background-color: #F9FAFB !important; color: #111827 !important; border: 1px solid #D1D5DB !important; }
+            .stButton button { background-color: #F3F4F6; color: #111827; border: 1px solid #D1D5DB; }
+            [data-testid="stSidebar"] { background-color: #F3F4F6 !important; }
+            </style>
+        """,
+        unsafe_allow_html=True,
+    )
+  else:
+    st.markdown(
+        """
+            <style>
+            .stApp { background-color: #0E1117; color: #FAFAFA; }
+            .stTextArea textarea { background-color: #1F2937 !important; color: #F9FAFB !important; border: 1px solid #374151 !important; }
+            .stButton button { background-color: #1F2937; color: #F9FAFB; border: 1px solid #374151; }
+            [data-testid="stSidebar"] { background-color: #161B22 !important; }
+            </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
   st.markdown("---")
   st.subheader("🎛️ Tinh Chỉnh Ngưỡng")
@@ -178,17 +200,6 @@ with st.sidebar:
   st.markdown("---")
   st.info("💡 **Đề tài 2 • Nhóm 5**\nIntent Classification (MASSIVE × PhoATIS)")
 
-# CSS TÙY BIẾN THEO CHẾ ĐỘ SÁNG / TỐI
-if "Light" in theme_mode:
-  bg_card = "#F3F4F6"
-  text_card = "#1F2937"
-  border_col = "#E5E7EB"
-else:
-  bg_card = "#1F2937"
-  text_card = "#F9FAFB"
-  border_col = "#374151"
-
-
 # 6. GIAO DIỆN CHÍNH
 st.title("🤖 Trợ Lý Hiểu Ý Định Người Dùng Tiếng Việt")
 st.caption(
@@ -202,19 +213,23 @@ tab_demo, tab_labels, tab_about = st.tabs([
     "📑 Thông Tin Đề Tài",
 ])
 
+# HÀM CALLBACK CẬP NHẬT TRỰC TIẾP Ô NHẬP LIỆU KHI BẤM NÚT S1 - S6
+if "query_input_box" not in st.session_state:
+  st.session_state.query_input_box = "hủy báo thức lúc sáu giờ sáng mai"
+
+
+def set_example_query(text):
+  st.session_state.query_input_box = text
+
+
 with tab_demo:
   col_left, col_right = st.columns([6, 5])
 
   with col_left:
     st.subheader("💬 Nhập câu khẩu lệnh:")
 
-    # Quản lý text thông qua session state để các nút bấm hoạt động mượt mà
-    if "input_text" not in st.session_state:
-      st.session_state.input_text = "hủy báo thức lúc sáu giờ sáng mai"
-
     user_query = st.text_area(
         "Nhập văn bản cần kiểm thử:",
-        value=st.session_state.input_text,
         height=95,
         placeholder="Gõ câu chuẩn, không dấu, teencode, typo hoặc câu lạ...",
         key="query_input_box",
@@ -223,28 +238,40 @@ with tab_demo:
     st.markdown("##### 🧪 Thử nhanh các kịch bản thực nghiệm:")
     c1, c2, c3 = st.columns(3)
     with c1:
-      if st.button("S1: Chuẩn ngữ pháp"):
-        st.session_state.input_text = "hủy báo thức lúc sáu giờ sáng mai"
-        st.rerun()
-      if st.button("S4: Lỗi gõ Telex"):
-        st.session_state.input_text = "huuyr báoo thứcc lúc 6h"
-        st.rerun()
+      st.button(
+          "S1: Chuẩn ngữ pháp",
+          on_click=set_example_query,
+          args=("hủy báo thức lúc sáu giờ sáng mai",),
+      )
+      st.button(
+          "S4: Lỗi gõ Telex",
+          on_click=set_example_query,
+          args=("huuyr báoo thứcc lúc 6h",),
+      )
     with c2:
-      if st.button("S2: Không dấu"):
-        st.session_state.input_text = "huy bao thuc luc sau gio sang mai"
-        st.rerun()
-      if st.button("S5: Câu ngắn mơ hồ"):
-        st.session_state.input_text = "thời tiết"
-        st.rerun()
+      st.button(
+          "S2: Không dấu",
+          on_click=set_example_query,
+          args=("huy bao thuc luc sau gio sang mai",),
+      )
+      st.button(
+          "S5: Câu ngắn mơ hồ",
+          on_click=set_example_query,
+          args=("thời tiết",),
+      )
     with c3:
-      if st.button("S3: Viết tắt/Teencode"):
-        st.session_state.input_text = "mai thoi tiet the nao ko"
-        st.rerun()
-      if st.button("S6: Ngoài phạm vi (OOS)"):
-        st.session_state.input_text = "hôm nay thị trường chứng khoán thế nào"
-        st.rerun()
+      st.button(
+          "S3: Viết tắt/Teencode",
+          on_click=set_example_query,
+          args=("mai thoi tiet the nao ko",),
+      )
+      st.button(
+          "S6: Ngoài phạm vi (OOS)",
+          on_click=set_example_query,
+          args=("hôm nay thị trường chứng khoán thế nào",),
+      )
 
-    # NÚT BẤM KIỂM SOÁT SUY LUẬN (CHỈ CHẠY KHI BẤM NÚT)
+    # NÚT BẤM DUY NHẤT ĐỂ KÍCH HOẠT SUY LUẬN
     btn_predict = st.button(
         "🚀 Phân Loại Ý Định", type="primary", use_container_width=True
     )
@@ -252,7 +279,6 @@ with tab_demo:
   with col_right:
     st.subheader("🚦 Kết Quả Phân Tích NLU:")
 
-    # CHỈ CHẠY SUY LUẬN KHI NGƯỜI DÙNG BẤM NÚT
     if btn_predict:
       if not user_query.strip():
         st.warning("⚠️ Vui lòng nhập câu khẩu lệnh trước khi phân loại!")
@@ -272,13 +298,15 @@ with tab_demo:
               input_ids=enc["input_ids"], attention_mask=enc["attention_mask"]
           ).logits
           probs = (
-              torch.softmax(logits / max(temp_val, 1e-4), dim=1).cpu().numpy()[0]
+              torch.softmax(logits / max(temp_val, 1e-4), dim=1)
+              .cpu()
+              .numpy()[0]
           )
 
         oos_score = float(probs[OOS_INDEX])
         in_scope_probs = probs[in_scope_indices]
 
-        # Chuẩn hóa phân phối in-scope về 100% để thanh Top-3 không bị hiển thị 0%
+        # Chuẩn hóa in-scope về 100% để hiển thị Top-3 trực quan
         sum_in = in_scope_probs.sum()
         norm_in_probs = (
             in_scope_probs / sum_in if sum_in > 0 else in_scope_probs
@@ -288,7 +316,7 @@ with tab_demo:
         predicted_intent = p4_id2label[best_in_idx]
         best_conf = float(np.max(in_scope_probs))
 
-        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3)
+        # QUYẾT ĐỊNH 3 TRẠNG THÁI
         if oos_score >= tau_oos_val:
           st.error(f"""
                     ### 🚨 TRẠNG THÁI 3: NGOÀI PHẠM VI (UNKNOWN / OOS)
