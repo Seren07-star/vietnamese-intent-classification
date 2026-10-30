@@ -26,24 +26,27 @@ TAU_OOS = 0.0596
 TAU_CONF = 0.9400
 
 
-# 1. HÀM TẢI CHECKPOINT TỰ ĐỘNG NẾU CHƯA CÓ TRÊN MÁY CHỦ STREAMLIT
+import os
+import gdown
+import streamlit as st
+
+
+# HÀM TẢI MÔ HÌNH TỰ ĐỘNG TỪ GOOGLE DRIVE QUA FILE_ID
 def download_checkpoint():
   ckpt_dir = "checkpoints"
   os.makedirs(ckpt_dir, exist_ok=True)
   ckpt_file = os.path.join(ckpt_dir, "p4_phobert_best.pt")
 
-  # Nếu chưa có file thì tải từ GitHub Release hoặc HuggingFace URL
+  # Nếu trên máy chủ Streamlit chưa có file thì tải về
   if not os.path.exists(ckpt_file):
-    with st.spinner("⏳ Đang tải trọng số mô hình P4 (khoảng 30 giây)..."):
-      # BẠN THAY ĐƯỜNG LINK DIRECT DOWNLOAD NÀY BẰNG LINK RELEASE CỦA BẠN:
-      # Hoặc link HuggingFace raw download: https://huggingface.co/your-name/model/resolve/main/p4_phobert_best.pt
-      url = "https://huggingface.co/uitnlp/visobert/resolve/main/pytorch_model.bin"  # Link mẫu
-      try:
-        r = requests.get(url, allow_redirects=True)
-        with open(ckpt_file, "wb") as f:
-          f.write(r.content)
-      except Exception:
-        pass
+    with st.spinner("⏳ Đang tải trọng số mô hình từ Google Drive..."):
+      # DÁN FILE_ID BẠN VỪA LẤY Ở BƯỚC 1 VÀO ĐÂY:
+      FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"  # Thay bằng ID thật của bạn
+
+      drive_url = f"https://drive.google.com/uc?id={FILE_ID}"
+      # gdown sẽ tự xử lý màn hình cảnh báo virus của file > 100MB
+      gdown.download(drive_url, ckpt_file, quiet=False)
+
   return ckpt_file
 
 
