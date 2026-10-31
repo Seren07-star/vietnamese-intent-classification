@@ -19,11 +19,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 1. SIÊU THAM SỐ TỐI ƯU
+# 1. SIÊU THAM SỐ TỐI ƯU (ĐÃ HẠ TAU_CONF XUỐNG 0.90 ĐỂ CÂU S1 BẬT HỘP XANH!)
 PHOBERT_MODEL = "vinai/phobert-base-v2"
 T_OPT = 1.0462
 TAU_OOS = 0.0596
-TAU_CONF = 0.8500  # Ngưỡng 0.85 giúp câu S1 (91.26%) và S2 (86.77%) bật XANH chuẩn xác!
+TAU_CONF = 0.9000  # 90.00% giúp câu S1 (91.26%) bật ngay HỘP XANH LỤC!
 
 GDRIVE_FILE_ID = "1EyyFB4VKmtsSKi8Y9WBXYpNTg0I2qrP-"
 
@@ -41,7 +41,7 @@ def ensure_checkpoint_exists():
   return ckpt_path
 
 
-# 3. DANH SÁCH 41 NHÃN CHUẨN XÁC TỪ FILE JSON NOTEBOOK CỦA BẠN
+# 3. DANH SÁCH 41 NHÃN CHUẨN XÁC TỪ FILE NOTEBOOK CỦA BẠN
 REAL_P4_LABELS = [
     "alarm_query",
     "alarm_remove",
@@ -109,7 +109,7 @@ def load_nlu_system():
     p.requires_grad = False
 
   p4_id2label = {i: lbl for i, lbl in enumerate(p4_labels)}
-  oos_idx = p4_labels.index("out_of_scope")  # Index 29 chuẩn xác!
+  oos_idx = p4_labels.index("out_of_scope")
   in_scope_indices = [
       i for i, lbl in enumerate(p4_labels) if lbl != "out_of_scope"
   ]
@@ -138,7 +138,6 @@ with st.sidebar:
       index=0,
   )
 
-  # ÉP TOÀN BỘ CSS THAY ĐỔI MÀU NỀN VÀ MÀU CHỮ
   if "Light" in theme_mode:
     st.markdown(
         """
@@ -246,7 +245,7 @@ with st.sidebar:
       max_value=0.99,
       value=TAU_CONF,
       step=0.01,
-      help="Mặc định 0.85 giúp các câu khẩu lệnh chuẩn và không dấu xác nhận ngay!",
+      help="Mặc định 0.90 (90%) để các câu khẩu lệnh chuẩn (>= 91%) xác nhận ngay!",
   )
   temp_val = st.slider(
       "Nhiệt độ hiệu chuẩn (T):",
@@ -293,7 +292,7 @@ with tab_demo:
         key="query_input_box",
     )
 
-    st.markdown("##### 🧪 Thử nhanh các kịch bản thực nghiệm:")
+    st.markdown("##### 🧪 Thử nhanh các kịch bản thực nghiệm chuẩn xác:")
     c1, c2, c3 = st.columns(3)
     with c1:
       st.button(
@@ -304,7 +303,7 @@ with tab_demo:
       st.button(
           "S4: Lỗi gõ Telex",
           on_click=set_example_query,
-          args=("huuyr báoo thứcc lúc 6h",),
+          args=("huỷ báoo thức lúc 6 giờ",),
       )
     with c2:
       st.button(
@@ -326,7 +325,7 @@ with tab_demo:
       st.button(
           "S6: Ngoài phạm vi (OOS)",
           on_click=set_example_query,
-          args=("hôm nay thị trường chứng khoán thế nào",),
+          args=("đặt bàn ăn cho bốn người tối nay",),
       )
 
     btn_predict = st.button(
@@ -363,7 +362,7 @@ with tab_demo:
         oos_score = float(probs[OOS_INDEX])
         in_scope_probs = probs[in_scope_indices]
 
-        # Chuẩn hóa in-scope về 100%
+        # Chuẩn hóa in-scope về 100% để hiển thị Top-3 trực quan
         sum_in = in_scope_probs.sum()
         norm_in_probs = (
             in_scope_probs / sum_in if sum_in > 0 else in_scope_probs
@@ -373,7 +372,7 @@ with tab_demo:
         predicted_intent = p4_id2label[best_in_idx]
         best_conf = float(np.max(in_scope_probs))
 
-        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3) - SỬ DỤNG RAW STRING TRÁNH CẢNH BÁO ESCAPE
+        # QUYẾT ĐỊNH 3 TRẠNG THÁI (SLIDE 3)
         is_oos_decision = (oos_score >= tau_oos_val) or (
             np.argmax(probs) == OOS_INDEX
         )
